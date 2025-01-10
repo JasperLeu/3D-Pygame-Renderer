@@ -137,7 +137,7 @@ def rotatePos(position, rotation):
                   [math.sin(zRot), math.cos(zRot), 0],
                    [0, 0, 1]), rot2))
 
-#               ------ ALL OBJECTS ------
+#               ------ OBJECTS AND RENDERING------
 objects = []
 class NewObject:
     def __init__(self, pos: list, vertices: list, triangles, color):
@@ -167,7 +167,7 @@ class NewObject:
             self.triangleDists[t] = math.dist(center, player.position)
 
 
-#               1   --- RENDERING FOR ALL OBJECTS ---
+#               1   --- RENDERING STACK ---
 def Update(player: Player):
     tris = []
     player._getInputs()

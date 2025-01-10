@@ -100,15 +100,15 @@ class Player:
 
         # Camera Looking
         lookSpeed = lookSens / FPS
-        # if self.upArrow and self.rotation[0] < 75:
-        #     self.rotation[0] += lookSpeed
-        # if self.downArrow and self.rotation[0] > -75:   *** fix when get smart ***
-        #     self.rotation[0] -= lookSpeed
+        if self.upArrow:
+            self.rotation[0] -= lookSpeed
+        if self.downArrow:
+            self.rotation[0] += lookSpeed
         if self.rightArrow:
             self.rotation[1] += lookSpeed
         if self.leftArrow:
             self.rotation[1] -= lookSpeed
-        self.rotation[1] %= 360
+        self.rotation = [r % 360 for r in self.rotation]
 
 
 # --- BASIC FUNCTIONS ---
@@ -125,17 +125,24 @@ def angleDiff(angle1, angle2):
         diff *= -1
     return diff
 
-def rotatePos(position, rotation):
+def rotatePos(position, rotation, order=None):
+    order = [0, 1, 2] if order is None else order
     xRot, yRot, zRot = [math.radians(i) for i in rotation]
-    rot1 = np.dot(([1, 0, 0],
-               [0, math.cos(xRot), -math.sin(xRot)],
-               [0, math.sin(xRot), math.cos(xRot)]), position)
-    rot2 = np.dot(([math.cos(yRot), 0, math.sin(yRot)],
-                   [0, 1, 0],
-                   [-math.sin(yRot), 0, math.cos(yRot)]), rot1)
-    return(np.dot(([math.cos(zRot), -math.sin(zRot), 0],
-                  [math.sin(zRot), math.cos(zRot), 0],
-                   [0, 0, 1]), rot2))
+    for r in order:
+        if r == 0:
+            position = np.dot(([1, 0, 0],
+                       [0, math.cos(xRot), -math.sin(xRot)],
+                       [0, math.sin(xRot), math.cos(xRot)]), position)
+        elif r == 1:
+            position = np.dot(([math.cos(yRot), 0, math.sin(yRot)],
+                       [0, 1, 0],
+                       [-math.sin(yRot), 0, math.cos(yRot)]), position)
+        elif r == 2:
+            position = np.dot(([math.cos(zRot), -math.sin(zRot), 0],
+                      [math.sin(zRot), math.cos(zRot), 0],
+                      [0, 0, 1]), position)
+    return position
+
 
 #               ------ OBJECTS AND RENDERING------
 objects = []
@@ -155,7 +162,7 @@ class NewObject:
         transformedVerts = [rotatePos(i, self.rotation) for i in self.vertices]
         for i, v in enumerate(transformedVerts):
             newPos = [v[p] + self.pos[p] - player.position[p] for p in range(3)]
-            newPos = rotatePos(newPos, [-r for r in player.rotation])
+            newPos = rotatePos(newPos, [-r for r in player.rotation], [2, 1, 0])
             if newPos[2] > 0:
                 self.screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
                 self.screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2

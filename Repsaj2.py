@@ -182,7 +182,7 @@ class Render:
             vec2 = [transformedVerts[f[2]][i] - transformedVerts[f[0]][i] for i in range(3)]
             normal = np.cross(vec1, vec2)
             vectorProduct = math.dist(vec1, [0, 0, 0]) * math.dist(vec2, [0, 0, 0])
-            factor = np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5
+            factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5
             globalFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in color]])
 
 

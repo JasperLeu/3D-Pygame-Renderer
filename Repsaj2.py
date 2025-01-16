@@ -2,17 +2,17 @@
 import pygame
 import math
 import numpy as np
-import time
 
 # -- CONSTANTS --
 SCREEN_WIDTH = 800
 ASPECT_RATIO = 1.5
-FPS = 100
+DELTA_TIME = 0.1
+runTime = 0
 
 # --- SCREEN SETUP ---
 screen = None
 RENDER_DISTANCE = 30
-
+LIGHT_VECTOR = [0, -1, 0]
 def SetupScreen(screenWidth, aspectRatio, RenderDistance):
     global SCREEN_WIDTH
     global ASPECT_RATIO
@@ -94,12 +94,12 @@ class Player:
             moveDir[0] += 1
         if self.aKey:
             moveDir[0] -= 1
-        scale = speed / FPS / math.dist(moveDir, [0, 0, 0]) if moveDir != [0, 0, 0] else 0
+        scale = speed * DELTA_TIME / math.dist(moveDir, [0, 0, 0]) if moveDir != [0, 0, 0] else 0
         moveOffset = rotatePos([moveDir[i] * scale for i in range(3)], [0, self.rotation[1], 0])
         self.position = [self.position[i] + moveOffset[i] for i in range(3)]
 
         # Camera Looking
-        lookSpeed = lookSens / FPS
+        lookSpeed = lookSens * DELTA_TIME
         if self.upArrow:
             self.rotation[0] -= lookSpeed
         if self.downArrow:
@@ -157,52 +157,44 @@ def uploadObj(file_path):
     return vertices, faces
 
 #               ------ OBJECTS AND RENDERING------
-objects = []
-class NewObject:
-    def __init__(self, pos: list, vertices: list, faces, color):
-        self.pos = pos
-        self.rotation = [0, 0, 0]
-        self.scale = [1, 1, 1]
-        self.vertices = vertices
-        self.screenPts = [[0, 0] for _ in self.vertices]
-        self.faces = faces
-        self.faceDists = [-1 for _ in self.faces]
-        self.color = color
-        objects.append(self)
-
-    def Calculate(self, player: Player):
+globalFaces = []
+class Render:
+    @staticmethod
+    def Mesh(player: Player, position, rotation, scale, vertices, faces, color):
         ratio = math.tan(math.radians(player.FOV/2))
-        transformedVerts = [rotatePos(r, self.rotation) for r in self.vertices]
-        transformedVerts = [[t[i] * self.scale[i] for i in range(3)] for t in transformedVerts]
+        transformedVerts = [rotatePos(r, rotation) for r in vertices]
+        transformedVerts = [[t[i] * scale[i] for i in range(3)] for t in transformedVerts]
+        screenPts = [[0, 0] for _ in vertices]
         for i, v in enumerate(transformedVerts):
-            newPos = [v[p] + self.pos[p] - player.position[p] for p in range(3)]
+            newPos = [v[p] + position[p] - player.position[p] for p in range(3)]
             newPos = rotatePos(newPos, [-r for r in player.rotation], [2, 1, 0])
             if newPos[2] != 0:
-                self.screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
-                self.screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
-        for i, f in enumerate(self.faces):
+                screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
+                screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
+        for f in faces:
             center = [0, 0, 0]
             for point in f:
                 for p in range(3):
-                    center[p] += self.pos[p]+transformedVerts[point][p]
+                    center[p] += position[p]+transformedVerts[point][p]
             avg = [p / len(center) for p in center]
-            self.faceDists[i] = math.dist(avg, player.position)
+            faceDist = math.dist(avg, player.position)
+            vec1 = [transformedVerts[f[1]][i] - transformedVerts[f[0]][i] for i in range(3)]
+            vec2 = [transformedVerts[f[2]][i] - transformedVerts[f[0]][i] for i in range(3)]
+            normal = np.cross(vec1, vec2)
+            vectorProduct = math.dist(vec1, [0, 0, 0]) * math.dist(vec2, [0, 0, 0])
+            factor = np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5
+            globalFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in color]])
 
 
 #               1   --- GAME UPDATE / RENDERING STACK ---
 def Update(player: Player):
+    global runTime
+    global DELTA_TIME
+    global globalFaces
     player._getInputs()
     screen.fill((0, 0, 0))
 
     # -- ORDER RENDERED OBJs --
-    faces = []
-    for i in objects:
-        i.Calculate(player)
-        for f in range(len(i.faces)):
-            distPercent = 0 if 1 - i.faceDists[f] / RENDER_DISTANCE < 0 else 1 - i.faceDists[
-                f] / RENDER_DISTANCE
-            newColor = [i.color[c] * distPercent for c in range(3)]
-            faces.append([i.screenPts[p] for p in i.faces[f]]+[i.faceDists[f], newColor])
     def sort(arr):
         if len(arr) <= 1:
             return arr
@@ -218,10 +210,13 @@ def Update(player: Player):
             left = sort(left)
             right = sort(right)
             return left + [pivot] + right
-    faces = sort(faces)
+    globalFaces = sort(globalFaces)
 
     # -- UPDATE CHANGES --
-    for f in faces:
+    for f in globalFaces:
         pygame.draw.polygon(screen, f[-1], f[:-2])
+    globalFaces = []
     pygame.display.update()
-    time.sleep(1 / FPS)
+    t = pygame.time.get_ticks()
+    DELTA_TIME = (t-runTime) / 1000
+    runTime = t

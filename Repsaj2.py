@@ -222,6 +222,6 @@ def Update(player: Player):
         pygame.draw.polygon(screen, f[-1], f[:-2])
     globalFaces = []
     pygame.display.update()
-    t = pygame.time.get_ticks()
-    DELTA_TIME = (t-runTime) / 1000
+    t = pygame.time.get_ticks()/1000
+    DELTA_TIME = t-runTime
     runTime = t

@@ -11,16 +11,13 @@ runTime = 0
 
 # --- SCREEN SETUP ---
 screen = None
-RENDER_DISTANCE = 30
 LIGHT_VECTOR = [0, -1, 0]
-def SetupScreen(screenWidth, aspectRatio, RenderDistance):
+def SetupScreen(screenWidth, aspectRatio):
     global SCREEN_WIDTH
     global ASPECT_RATIO
     global screen
-    global RENDER_DISTANCE
     SCREEN_WIDTH = screenWidth
     ASPECT_RATIO = aspectRatio
-    RENDER_DISTANCE = RenderDistance
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_WIDTH / ASPECT_RATIO))
 
@@ -176,7 +173,7 @@ class Render:
             for point in f:
                 for p in range(3):
                     center[p] += position[p]+transformedVerts[point][p]
-            avg = [p / len(center) for p in center]
+            avg = [p / len(f) for p in center]
             faceDist = math.dist(avg, player.position)
             vec1 = [transformedVerts[f[1]][i] - transformedVerts[f[0]][i] for i in range(3)]
             vec2 = [transformedVerts[f[2]][i] - transformedVerts[f[0]][i] for i in range(3)]

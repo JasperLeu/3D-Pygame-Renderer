@@ -165,21 +165,28 @@ class Render:
         for i, v in enumerate(transformedVerts):
             newPos = [v[p] + position[p] - player.position[p] for p in range(3)]
             newPos = rotatePos(newPos, [-r for r in player.rotation], [2, 1, 0])
-            if newPos[2] != 0:
+            if newPos[2] > 0:
                 screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
                 screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
+            else:
+                screenPts[i] = [-50, -50]
         for f in faces:
+            outOfFrame = False
             center = [0, 0, 0]
             for point in f:
+                if screenPts[point] == [-50, -50]:
+                    outOfFrame = True
                 for p in range(3):
                     center[p] += position[p]+transformedVerts[point][p]
+            if outOfFrame:
+                continue
             avg = [p / len(f) for p in center]
             faceDist = math.dist(avg, player.position)
             vec1 = [transformedVerts[f[1]][i] - transformedVerts[f[0]][i] for i in range(3)]
             vec2 = [transformedVerts[f[2]][i] - transformedVerts[f[0]][i] for i in range(3)]
             normal = np.cross(vec1, vec2)
             vectorProduct = math.dist(vec1, [0, 0, 0]) * math.dist(vec2, [0, 0, 0])
-            factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5
+            factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5 if vectorProduct != 0 else 1
             globalFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in color]])
 
     @ staticmethod
@@ -189,6 +196,11 @@ class Render:
         tris = [[3, 2, 1, 0], [4, 5, 6, 7], [0, 1, 5, 4],
                 [2, 3, 7, 6], [3, 0, 4, 7], [1, 2, 6, 5]]
         Render.Mesh(player, position, rotation, scale, verts, tris, color)
+
+    @ staticmethod
+    def Plane(player: Player, position, rotation, scale, color):
+        verts = [[5, 0, 5], [5, 0, -5], [-5, 0, -5], [-5, 0, 5]]
+        Render.Mesh(player, position, rotation, scale, verts, [[0, 1, 2, 3]], color)
 
 
 #               1   --- GAME UPDATE / RENDERING STACK ---

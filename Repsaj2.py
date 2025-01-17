@@ -169,17 +169,15 @@ class Render:
                 screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
                 screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
             else:
-                screenPts[i] = [-50, -50]
+                screenPts[i] = [False]
         for f in faces:
             outOfFrame = False
             center = [0, 0, 0]
             for point in f:
-                if screenPts[point] == [-50, -50]:
-                    outOfFrame = True
+                if screenPts[point] == [False]: outOfFrame = True
                 for p in range(3):
                     center[p] += position[p]+transformedVerts[point][p]
-            if outOfFrame:
-                continue
+            if outOfFrame: continue
             avg = [p / len(f) for p in center]
             faceDist = math.dist(avg, player.position)
             vec1 = [transformedVerts[f[1]][i] - transformedVerts[f[0]][i] for i in range(3)]

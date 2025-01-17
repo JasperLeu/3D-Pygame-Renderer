@@ -22,74 +22,31 @@ def SetupScreen(screenWidth, aspectRatio):
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_WIDTH / ASPECT_RATIO))
 
 
-# --- PLAYER SETUP ---
-class Player:
+# --- cam SETUP ---
+# Input States
+leftArrow = False
+rightArrow = False
+upArrow = False
+downArrow = False
+wKey = False
+sKey = False
+aKey = False
+dKey = False
+class Camera:
     def __init__(self, position, rotation, fieldOfView):
         self.FOV = fieldOfView
         self.position = position
         self.rotation = rotation
-
-        # Input States
-        self.leftArrow = False
-        self.rightArrow = False
-        self.upArrow = False
-        self.downArrow = False
-        self.wKey = False
-        self.sKey = False
-        self.aKey = False
-        self.dKey = False
-
-    def _getInputs(self):
-        inputs = pygame.event.get()
-        for keyPress in inputs:
-            # Camera Controls
-            if keyPress.type == pygame.KEYDOWN:
-                if keyPress.key == pygame.K_LEFT:
-                    self.leftArrow = True
-                elif keyPress.key == pygame.K_RIGHT:
-                    self.rightArrow = True
-                elif keyPress.key == pygame.K_UP:
-                    self.upArrow = True
-                elif keyPress.key == pygame.K_DOWN:
-                    self.downArrow = True
-                if keyPress.key == pygame.K_w:
-                    self.wKey = True
-                elif keyPress.key == pygame.K_a:
-                    self.aKey = True
-                elif keyPress.key == pygame.K_s:
-                    self.sKey = True
-                elif keyPress.key == pygame.K_d:
-                    self.dKey = True
-            elif keyPress.type == pygame.KEYUP:
-                if keyPress.key == pygame.K_LEFT:
-                    self.leftArrow = False
-                elif keyPress.key == pygame.K_RIGHT:
-                    self.rightArrow = False
-                elif keyPress.key == pygame.K_UP:
-                    self.upArrow = False
-                elif keyPress.key == pygame.K_DOWN:
-                    self.downArrow = False
-                if keyPress.key == pygame.K_w:
-                    self.wKey = False
-                elif keyPress.key == pygame.K_a:
-                    self.aKey = False
-                elif keyPress.key == pygame.K_s:
-                    self.sKey = False
-                elif keyPress.key == pygame.K_d:
-                    self.dKey = False
-            # QUIT GAME
-            elif keyPress.type == pygame.QUIT:
-                pygame.quit()
     def movementActions(self, speed, lookSens):
         # Movement
         moveDir = [0, 0, 0]
-        if self.wKey:
+        if wKey:
             moveDir[2] += 1
-        if self.sKey:
+        if sKey:
             moveDir[2] -= 1
-        if self.dKey:
+        if dKey:
             moveDir[0] += 1
-        if self.aKey:
+        if aKey:
             moveDir[0] -= 1
         scale = speed * DELTA_TIME / math.dist(moveDir, [0, 0, 0]) if moveDir != [0, 0, 0] else 0
         moveOffset = rotatePos([moveDir[i] * scale for i in range(3)], [0, self.rotation[1], 0])
@@ -97,16 +54,67 @@ class Player:
 
         # Camera Looking
         lookSpeed = lookSens * DELTA_TIME
-        if self.upArrow:
+        if upArrow:
             self.rotation[0] -= lookSpeed
-        if self.downArrow:
+        if downArrow:
             self.rotation[0] += lookSpeed
-        if self.rightArrow:
+        if rightArrow:
             self.rotation[1] += lookSpeed
-        if self.leftArrow:
+        if leftArrow:
             self.rotation[1] -= lookSpeed
         self.rotation = [r % 360 for r in self.rotation]
 
+
+# --- USER INPUTS ---
+def _getInputs():
+    global leftArrow
+    global rightArrow
+    global upArrow
+    global downArrow
+    global wKey
+    global aKey
+    global sKey
+    global dKey
+    inputs = pygame.event.get()
+    for keyPress in inputs:
+        # Camera Controls
+        if keyPress.type == pygame.KEYDOWN:
+            if keyPress.key == pygame.K_LEFT:
+                leftArrow = True
+            elif keyPress.key == pygame.K_RIGHT:
+                rightArrow = True
+            elif keyPress.key == pygame.K_UP:
+                upArrow = True
+            elif keyPress.key == pygame.K_DOWN:
+                downArrow = True
+            if keyPress.key == pygame.K_w:
+                wKey = True
+            elif keyPress.key == pygame.K_a:
+                aKey = True
+            elif keyPress.key == pygame.K_s:
+                sKey = True
+            elif keyPress.key == pygame.K_d:
+                dKey = True
+        elif keyPress.type == pygame.KEYUP:
+            if keyPress.key == pygame.K_LEFT:
+                leftArrow = False
+            elif keyPress.key == pygame.K_RIGHT:
+                rightArrow = False
+            elif keyPress.key == pygame.K_UP:
+                upArrow = False
+            elif keyPress.key == pygame.K_DOWN:
+                downArrow = False
+            if keyPress.key == pygame.K_w:
+                wKey = False
+            elif keyPress.key == pygame.K_a:
+                aKey = False
+            elif keyPress.key == pygame.K_s:
+                sKey = False
+            elif keyPress.key == pygame.K_d:
+                dKey = False
+        # QUIT GAME
+        elif keyPress.type == pygame.QUIT:
+            pygame.quit()
 
 # --- BASIC FUNCTIONS ---
 
@@ -157,14 +165,14 @@ def uploadObj(file_path):
 globalFaces = []
 class Render:
     @ staticmethod
-    def Mesh(player: Player, position, rotation, scale, vertices, faces, color):
-        ratio = math.tan(math.radians(player.FOV/2))
+    def Mesh(cam: Camera, position, rotation, scale, vertices, faces, color):
+        ratio = math.tan(math.radians(cam.FOV/2))
         transformedVerts = [rotatePos(r, rotation) for r in vertices]
         transformedVerts = [[t[i] * scale[i] for i in range(3)] for t in transformedVerts]
         screenPts = [[0, 0] for _ in vertices]
         for i, v in enumerate(transformedVerts):
-            newPos = [v[p] + position[p] - player.position[p] for p in range(3)]
-            newPos = rotatePos(newPos, [-r for r in player.rotation], [2, 1, 0])
+            newPos = [v[p] + position[p] - cam.position[p] for p in range(3)]
+            newPos = rotatePos(newPos, [-r for r in cam.rotation], [2, 1, 0])
             if newPos[2] > 0:
                 screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
                 screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
@@ -179,7 +187,7 @@ class Render:
                     center[p] += position[p]+transformedVerts[point][p]
             if outOfFrame: continue
             avg = [p / len(f) for p in center]
-            faceDist = math.dist(avg, player.position)
+            faceDist = math.dist(avg, cam.position)
             vec1 = [transformedVerts[f[1]][i] - transformedVerts[f[0]][i] for i in range(3)]
             vec2 = [transformedVerts[f[2]][i] - transformedVerts[f[0]][i] for i in range(3)]
             normal = np.cross(vec1, vec2)
@@ -188,25 +196,25 @@ class Render:
             globalFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in color]])
 
     @ staticmethod
-    def Cube(player: Player, position, rotation, scale, color):
+    def Cube(cam: Camera, position, rotation, scale, color):
         verts = [[1, 1, 1], [1, -1, 1], [-1, -1, 1], [-1, 1, 1],
                  [1, 1, -1], [1, -1, -1], [-1, -1, -1], [-1, 1, -1]]
         tris = [[3, 2, 1, 0], [4, 5, 6, 7], [0, 1, 5, 4],
                 [2, 3, 7, 6], [3, 0, 4, 7], [1, 2, 6, 5]]
-        Render.Mesh(player, position, rotation, scale, verts, tris, color)
+        Render.Mesh(cam, position, rotation, scale, verts, tris, color)
 
     @ staticmethod
-    def Plane(player: Player, position, rotation, scale, color):
+    def Plane(cam: Camera, position, rotation, scale, color):
         verts = [[5, 0, 5], [5, 0, -5], [-5, 0, -5], [-5, 0, 5]]
-        Render.Mesh(player, position, rotation, scale, verts, [[0, 1, 2, 3]], color)
+        Render.Mesh(cam, position, rotation, scale, verts, [[0, 1, 2, 3]], color)
 
 
 #               1   --- GAME UPDATE / RENDERING STACK ---
-def Update(player: Player):
+def Update():
     global runTime
     global DELTA_TIME
     global globalFaces
-    player._getInputs()
+    _getInputs()
     screen.fill((0, 0, 0))
 
     # -- ORDER RENDERED OBJs --

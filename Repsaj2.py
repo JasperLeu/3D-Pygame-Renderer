@@ -156,7 +156,7 @@ def uploadObj(file_path):
 #               ------ OBJECTS AND RENDERING------
 globalFaces = []
 class Render:
-    @staticmethod
+    @ staticmethod
     def Mesh(player: Player, position, rotation, scale, vertices, faces, color):
         ratio = math.tan(math.radians(player.FOV/2))
         transformedVerts = [rotatePos(r, rotation) for r in vertices]
@@ -181,6 +181,14 @@ class Render:
             vectorProduct = math.dist(vec1, [0, 0, 0]) * math.dist(vec2, [0, 0, 0])
             factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5
             globalFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in color]])
+
+    @ staticmethod
+    def Cube(player: Player, position, rotation, scale, color):
+        verts = [[1, 1, 1], [1, -1, 1], [-1, -1, 1], [-1, 1, 1],
+                 [1, 1, -1], [1, -1, -1], [-1, -1, -1], [-1, 1, -1]]
+        tris = [[3, 2, 1, 0], [4, 5, 6, 7], [0, 1, 5, 4],
+                [2, 3, 7, 6], [3, 0, 4, 7], [1, 2, 6, 5]]
+        Render.Mesh(player, position, rotation, scale, verts, tris, color)
 
 
 #               1   --- GAME UPDATE / RENDERING STACK ---

@@ -32,11 +32,14 @@ wKey = False
 sKey = False
 aKey = False
 dKey = False
+spaceKey = False
+shiftKey = False
 class Camera:
     def __init__(self, position, rotation, fieldOfView):
         self.FOV = fieldOfView
         self.position = position
         self.rotation = rotation
+
     def movementActions(self, speed, lookSens):
         # Movement
         moveDir = [0, 0, 0]
@@ -51,6 +54,10 @@ class Camera:
         scale = speed * DELTA_TIME / math.dist(moveDir, [0, 0, 0]) if moveDir != [0, 0, 0] else 0
         moveOffset = rotatePos([moveDir[i] * scale for i in range(3)], [0, self.rotation[1], 0])
         self.position = [self.position[i] + moveOffset[i] for i in range(3)]
+        if spaceKey:
+            self.position[1] += speed * DELTA_TIME
+        if shiftKey:
+            self.position[1] -= speed * DELTA_TIME
 
         # Camera Looking
         lookSpeed = lookSens * DELTA_TIME
@@ -75,6 +82,8 @@ def _getInputs():
     global aKey
     global sKey
     global dKey
+    global spaceKey
+    global shiftKey
     inputs = pygame.event.get()
     for keyPress in inputs:
         # Camera Controls
@@ -87,7 +96,7 @@ def _getInputs():
                 upArrow = True
             elif keyPress.key == pygame.K_DOWN:
                 downArrow = True
-            if keyPress.key == pygame.K_w:
+            elif keyPress.key == pygame.K_w:
                 wKey = True
             elif keyPress.key == pygame.K_a:
                 aKey = True
@@ -95,6 +104,11 @@ def _getInputs():
                 sKey = True
             elif keyPress.key == pygame.K_d:
                 dKey = True
+            elif keyPress.key == pygame.K_SPACE:
+                spaceKey = True
+            elif keyPress.key == pygame.K_LSHIFT:
+                shiftKey = True
+
         elif keyPress.type == pygame.KEYUP:
             if keyPress.key == pygame.K_LEFT:
                 leftArrow = False
@@ -104,7 +118,7 @@ def _getInputs():
                 upArrow = False
             elif keyPress.key == pygame.K_DOWN:
                 downArrow = False
-            if keyPress.key == pygame.K_w:
+            elif keyPress.key == pygame.K_w:
                 wKey = False
             elif keyPress.key == pygame.K_a:
                 aKey = False
@@ -112,6 +126,10 @@ def _getInputs():
                 sKey = False
             elif keyPress.key == pygame.K_d:
                 dKey = False
+            elif keyPress.key == pygame.K_SPACE:
+                spaceKey = False
+            elif keyPress.key == pygame.K_LSHIFT:
+                shiftKey = False
         # QUIT GAME
         elif keyPress.type == pygame.QUIT:
             pygame.quit()

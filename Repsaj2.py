@@ -1,28 +1,40 @@
-#                       ------- Jasper's awesome 3d library --------
+
+# -------------------------------------------THE BEST 3D PYTHON LIBRARY-------------------------------------------------
 import pygame
 import math
 import numpy as np
 
-# -- CONSTANTS --
-SCREEN_WIDTH = 800
-ASPECT_RATIO = 1.5
-DELTA_TIME = 0.1
-runTime = 0
 
+# -------------------------------------------SCREEN OBJECT--------------------------------------------------------------
+class Window:
+    def __init__(self):
+        self.Display = pygame.display.set_mode()
+        self.RESOLUTION = []
 
-# --- SCREEN SETUP ---
-screen = None
+# GLOBAL VARIABLES
 LIGHT_VECTOR = [0, -1, 0]
+SCREEN = Window()
 
-#                        ----- CORE FUNCTIONS -----
-def SetupScreen(screenWidth, aspectRatio):
-    global SCREEN_WIDTH
-    global ASPECT_RATIO
-    global screen
-    SCREEN_WIDTH = screenWidth
-    ASPECT_RATIO = aspectRatio
+# -------------------------------------------TIME CLASS--------------------------------------------------------------
+class Time:
+    def __init__(self):
+        self.deltTime = 0.1
+        self.runTime = 0
+
+    def frameStep(self):
+        tempTime = pygame.time.get_ticks()/1000
+        self.deltTime = tempTime - self.runTime
+        self.runTime = tempTime
+
+
+# -------------------------------------------SETUP FUNCTIONS------------------------------------------------------------
+def SetupScreen(screenWidth, screenHeight):
+    global SCREEN
+    SCREEN.RESOLUTION = [screenWidth, screenHeight]
     pygame.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_WIDTH / ASPECT_RATIO))
+    SCREEN.Display = pygame.display.set_mode((screenWidth, screenHeight))
+
+
 def angleDiff(angle1, angle2):
     diff = abs(angle1 - angle2)
     if diff > 180:
@@ -30,6 +42,8 @@ def angleDiff(angle1, angle2):
     if round((angle1 - diff) % 360, 4) == round(angle2, 4):
         diff *= -1
     return diff
+
+
 def rotatePos(position, rotation, order=None):
     order = [0, 1, 2] if order is None else order
     xRot, yRot, zRot = [math.radians(i) for i in rotation]
@@ -48,7 +62,25 @@ def rotatePos(position, rotation, order=None):
                       [0, 0, 1]), position)
     return position
 
-#                   ---- OBJECT TRANSFORMS ------
+
+def uploadObj(file_path):
+    vertices = []
+    faces = []
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+            if line.startswith('v '):
+                vertex = line.split()[1:]
+                vertices.append([float(v) for v in vertex])
+            elif line.startswith('f '):
+                face = line.split()[1:]
+                face = [int(f.split('/')[0])-1 for f in face]
+                faces.append(face)
+    return vertices, faces
+
+
+# ---------------------------------------------OBJECT TRANSFORMS--------------------------------------------------------
 class Transform:
     def __init__(self, position, rotation, scale):
         self.position = position
@@ -57,13 +89,16 @@ class Transform:
         self.localRotation = rotation
         self.scale = scale
         self.localScale = scale
-    def setParent(self, parent):
-        newLocalPos = rotatePos(self.localPosition, parent.rotation)
-        self.position = [parent.position[i] + newLocalPos[i] for i in range(3)]
-        self.rotation = [parent.rotation[i] + self.localRotation[i] for i in range(3)]
-        self.scale = [parent.scale[i] * self.localScale[i] for i in range(3)]
+        self.parent = None
 
-#                                       ------- CAMERA SETUP -------
+    def Update(self):
+        if self.parent != None:
+            newLocalPos = rotatePos(self.localPosition, self.parent.rotation)
+            self.position = [self.parent.position[i] + newLocalPos[i] for i in range(3)]
+            self.rotation = [self.parent.rotation[i] + self.localRotation[i] for i in range(3)]
+            self.scale = [self.parent.scale[i] * self.localScale[i] for i in range(3)]
+
+# ---------------------------------------------CAMERA-SETUP-------------------------------------------------------------
 # Input States
 leftArrow = False
 rightArrow = False
@@ -109,7 +144,8 @@ class Camera:
         if leftArrow:
             self.transform.rotation[1] -= lookSpeed
         self.transform.rotation = [r % 360 for r in self.transform.rotation]
-# --- USER INPUTS ---
+
+# ---------------------------------------------USER INPUTS--------------------------------------------------------------
 def _getInputs():
     global leftArrow
     global rightArrow
@@ -171,24 +207,8 @@ def _getInputs():
         elif keyPress.type == pygame.QUIT:
             pygame.quit()
 
-def uploadObj(file_path):
-    vertices = []
-    faces = []
 
-    with open(file_path, 'r') as file:
-        for line in file:
-            line = line.strip()
-            if line.startswith('v '):
-                vertex = line.split()[1:]
-                vertices.append([float(v) for v in vertex])
-            elif line.startswith('f '):
-                face = line.split()[1:]
-                face = [int(f.split('/')[0])-1 for f in face]
-                faces.append(face)
-    return vertices, faces
-
-
-#               ------ OBJECTS AND RENDERING------
+# -----------------------------------------------OBJECT CLASS-----------------------------------------------------------
 globalFaces = []
 class Render:
     @ staticmethod
@@ -201,8 +221,8 @@ class Render:
             newPos = [v[p] + transform.position[p] - cam.transform.position[p] for p in range(3)]
             newPos = rotatePos(newPos, [-r for r in cam.transform.rotation], [2, 1, 0])
             if newPos[2] > 0:
-                screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
-                screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * SCREEN_WIDTH / 2
+                screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * SCREEN. [0] / 2
+                screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * Resolution[0] / 2
             else:
                 screenPts[i] = [False]
         for f in faces:
@@ -212,7 +232,8 @@ class Render:
                 if screenPts[point] == [False]: outOfFrame = True
                 for p in range(3):
                     center[p] += transform.position[p]+transformedVerts[point][p]
-            if outOfFrame: continue
+            if outOfFrame:
+                continue
             avg = [p / len(f) for p in center]
             faceDist = math.dist(avg, cam.transform.position)
             vec1 = [transformedVerts[f[1]][i] - transformedVerts[f[0]][i] for i in range(3)]
@@ -236,7 +257,7 @@ class Render:
         Render.Mesh(cam, transform, verts, [[0, 1, 2, 3]], color)
 
 
-#               1   --- GAME UPDATE / RENDERING STACK ---
+# -------------------------------------GAME UPDATE / RENDERING----------------------------------------------------------
 def Update():
     global runTime
     global DELTA_TIME
@@ -267,6 +288,3 @@ def Update():
         pygame.draw.polygon(screen, f[-1], f[:-2])
     globalFaces = []
     pygame.display.update()
-    t = pygame.time.get_ticks()/1000
-    DELTA_TIME = t-runTime
-    runTime = t

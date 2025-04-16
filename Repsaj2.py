@@ -8,31 +8,36 @@ import numpy as np
 # -------------------------------------------SCREEN OBJECT--------------------------------------------------------------
 class Window:
     def __init__(self):
-        self.Display = pygame.display.set_mode()
-        self.RESOLUTION = []
-
-# GLOBAL VARIABLES
-LIGHT_VECTOR = [0, -1, 0]
-SCREEN = Window()
+        self.display = pygame.display.set_mode()
+        self.resolution = []
+        self.pixelStack = []
 
 # -------------------------------------------TIME CLASS--------------------------------------------------------------
-class Time:
+class TimeClass:
     def __init__(self):
-        self.deltTime = 0.1
+        self.deltaTime = 0.1
         self.runTime = 0
 
     def frameStep(self):
         tempTime = pygame.time.get_ticks()/1000
-        self.deltTime = tempTime - self.runTime
+        self.deltaTime = tempTime - self.runTime
         self.runTime = tempTime
+
+# GLOBAL VARIABLES
+LIGHT_VECTOR = [0, -1, 0]
+globalTime = TimeClass()
+screen = Window()
+gameObjects = []
+
 
 
 # -------------------------------------------SETUP FUNCTIONS------------------------------------------------------------
 def SetupScreen(screenWidth, screenHeight):
-    global SCREEN
-    SCREEN.RESOLUTION = [screenWidth, screenHeight]
+    global screen
+    screen.resolution = [screenWidth, screenHeight]
+    screen.pixelStack = np.zeros((screenWidth, screenHeight))
     pygame.init()
-    SCREEN.Display = pygame.display.set_mode((screenWidth, screenHeight))
+    screen.display = pygame.display.set_mode((screenWidth, screenHeight))
 
 
 def angleDiff(angle1, angle2):
@@ -106,14 +111,16 @@ upArrow = False
 downArrow = False
 wKey = False
 sKey = False
-aKey = False
 dKey = False
+aKey = False
 spaceKey = False
 shiftKey = False
 class Camera:
     def __init__(self, transform: Transform, fieldOfView):
         self.FOV = fieldOfView
         self.transform = transform
+        self.clipPlane = 0.1
+
     def movementActions(self, speed, lookSens):
         # Movement
         moveDir = [0, 0, 0]
@@ -125,16 +132,16 @@ class Camera:
             moveDir[0] += 1
         if aKey:
             moveDir[0] -= 1
-        scale = speed * DELTA_TIME / math.dist(moveDir, [0, 0, 0]) if moveDir != [0, 0, 0] else 0
+        scale = speed * globalTime.deltaTime / math.dist(moveDir, [0, 0, 0]) if moveDir != [0, 0, 0] else 0
         moveOffset = rotatePos([moveDir[i] * scale for i in range(3)], [0, self.transform.rotation[1], 0])
         self.transform.position = [self.transform.position[i] + moveOffset[i] for i in range(3)]
         if spaceKey:
-            self.transform.position[1] += speed * DELTA_TIME
+            self.transform.position[1] += speed * globalTime.deltaTime
         if shiftKey:
-            self.transform.position[1] -= speed * DELTA_TIME
+            self.transform.position[1] -= speed * globalTime.deltaTime
 
         # Camera Looking
-        lookSpeed = lookSens * DELTA_TIME
+        lookSpeed = lookSens * globalTime.deltaTime
         if upArrow:
             self.transform.rotation[0] -= lookSpeed
         if downArrow:
@@ -209,29 +216,36 @@ def _getInputs():
 
 
 # -----------------------------------------------OBJECT CLASS-----------------------------------------------------------
-globalFaces = []
-class Render:
-    @ staticmethod
-    def Mesh(cam: Camera, transform: Transform, vertices, faces, color):
+class GameObject:
+    def __init__(self, transform: Transform):
+        global gameObjects
+        self.transform = transform
+        self.vertices = []
+        self.faces = []
+        self.color = (255, 255, 255)
+        gameObjects.append(self)
+
+    def Render(self, cam: Camera):
+        objectFaces = []
         ratio = math.tan(math.radians(cam.FOV/2))
-        transformedVerts = [rotatePos(r, transform.rotation) for r in vertices]
-        transformedVerts = [[t[i] * transform.scale[i] for i in range(3)] for t in transformedVerts]
-        screenPts = [[0, 0] for _ in vertices]
+        transformedVerts = [rotatePos(r, self.transform.rotation) for r in self.vertices]
+        transformedVerts = [[t[i] * self.transform.scale[i] for i in range(3)] for t in transformedVerts]
+        screenPts = [[0, 0] for _ in self.vertices]
         for i, v in enumerate(transformedVerts):
-            newPos = [v[p] + transform.position[p] - cam.transform.position[p] for p in range(3)]
+            newPos = [v[p] + self.transform.position[p] - cam.transform.position[p] for p in range(3)]
             newPos = rotatePos(newPos, [-r for r in cam.transform.rotation], [2, 1, 0])
             if newPos[2] > 0:
-                screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * SCREEN. [0] / 2
-                screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * Resolution[0] / 2
+                screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * screen.resolution[0] / 2
+                screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * screen.resolution[0] / 2
             else:
                 screenPts[i] = [False]
-        for f in faces:
+        for f in self.faces:
             outOfFrame = False
             center = [0, 0, 0]
             for point in f:
                 if screenPts[point] == [False]: outOfFrame = True
                 for p in range(3):
-                    center[p] += transform.position[p]+transformedVerts[point][p]
+                    center[p] += self.transform.position[p]+transformedVerts[point][p]
             if outOfFrame:
                 continue
             avg = [p / len(f) for p in center]
@@ -241,31 +255,21 @@ class Render:
             normal = np.cross(vec1, vec2)
             vectorProduct = math.dist(vec1, [0, 0, 0]) * math.dist(vec2, [0, 0, 0])
             factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5 if vectorProduct != 0 else 1
-            globalFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in color]])
-
-    @ staticmethod
-    def Cube(cam: Camera, transform: Transform, color):
-        verts = [[1, 1, 1], [1, -1, 1], [-1, -1, 1], [-1, 1, 1],
-                 [1, 1, -1], [1, -1, -1], [-1, -1, -1], [-1, 1, -1]]
-        tris = [[3, 2, 1, 0], [4, 5, 6, 7], [0, 1, 5, 4],
-                [2, 3, 7, 6], [3, 0, 4, 7], [1, 2, 6, 5]]
-        Render.Mesh(cam, transform, verts, tris, color)
-
-    @ staticmethod
-    def Plane(cam: Camera, transform: Transform, color):
-        verts = [[5, 0, 5], [5, 0, -5], [-5, 0, -5], [-5, 0, 5]]
-        Render.Mesh(cam, transform, verts, [[0, 1, 2, 3]], color)
-
+            objectFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in self.color]])
+        return objectFaces
 
 # -------------------------------------GAME UPDATE / RENDERING----------------------------------------------------------
-def Update():
-    global runTime
-    global DELTA_TIME
-    global globalFaces
+def Update(camera: Camera):
+    global globalTime
+    global gameObjects
     _getInputs()
-    screen.fill((0, 0, 0))
+    screen.display.fill((0, 0, 0))
 
-    # -- ORDER RENDERED OBJs --
+    globalFaces = []
+    for obj in gameObjects:
+        globalFaces += obj.Render(camera)
+
+    # -- ORDER RENDERED TRIANGLES --
     def sort(arr):
         if len(arr) <= 1:
             return arr
@@ -285,6 +289,6 @@ def Update():
 
     # -- UPDATE CHANGES --
     for f in globalFaces:
-        pygame.draw.polygon(screen, f[-1], f[:-2])
-    globalFaces = []
+        pygame.draw.polygon(screen.display, f[-1], f[:-2])
     pygame.display.update()
+    globalTime.frameStep()

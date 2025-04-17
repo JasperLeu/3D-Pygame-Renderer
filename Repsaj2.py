@@ -1,4 +1,3 @@
-
 # -------------------------------------------THE BEST 3D PYTHON LIBRARY-------------------------------------------------
 import pygame
 import math
@@ -13,7 +12,7 @@ class Window:
         self.pixelStack = []
 
 # -------------------------------------------TIME CLASS--------------------------------------------------------------
-class TimeClass:
+class Timer:
     def __init__(self):
         self.deltaTime = 0.1
         self.runTime = 0
@@ -25,10 +24,9 @@ class TimeClass:
 
 # GLOBAL VARIABLES
 LIGHT_VECTOR = [0, -1, 0]
-globalTime = TimeClass()
+Time = Timer()
 screen = Window()
 gameObjects = []
-
 
 
 # -------------------------------------------SETUP FUNCTIONS------------------------------------------------------------
@@ -87,12 +85,12 @@ def uploadObj(file_path):
 
 # ---------------------------------------------OBJECT TRANSFORMS--------------------------------------------------------
 class Transform:
-    def __init__(self, position, rotation, scale):
-        self.position = position
+    def __init__(self, position=None, rotation=None, scale=None):
+        self.position = [0, 0, 0] if position is None else position
         self.localPosition = position
-        self.rotation = rotation
+        self.rotation = [0, 0, 0] if rotation is None else rotation
         self.localRotation = rotation
-        self.scale = scale
+        self.scale = [1, 1, 1] if scale is None else scale
         self.localScale = scale
         self.parent = None
 
@@ -115,13 +113,17 @@ dKey = False
 aKey = False
 spaceKey = False
 shiftKey = False
+
+
 class Camera:
     def __init__(self, transform: Transform, fieldOfView):
         self.FOV = fieldOfView
         self.transform = transform
         self.clipPlane = 0.1
+        self.speed = 5
+        self.lookSense = 90
 
-    def movementActions(self, speed, lookSens):
+    def movementActions(self):
         # Movement
         moveDir = [0, 0, 0]
         if wKey:
@@ -132,16 +134,16 @@ class Camera:
             moveDir[0] += 1
         if aKey:
             moveDir[0] -= 1
-        scale = speed * globalTime.deltaTime / math.dist(moveDir, [0, 0, 0]) if moveDir != [0, 0, 0] else 0
+        scale = self.speed * Time.deltaTime / math.dist(moveDir, [0, 0, 0]) if moveDir != [0, 0, 0] else 0
         moveOffset = rotatePos([moveDir[i] * scale for i in range(3)], [0, self.transform.rotation[1], 0])
         self.transform.position = [self.transform.position[i] + moveOffset[i] for i in range(3)]
         if spaceKey:
-            self.transform.position[1] += speed * globalTime.deltaTime
+            self.transform.position[1] += self.speed * Time.deltaTime
         if shiftKey:
-            self.transform.position[1] -= speed * globalTime.deltaTime
+            self.transform.position[1] -= self.speed * Time.deltaTime
 
         # Camera Looking
-        lookSpeed = lookSens * globalTime.deltaTime
+        lookSpeed = self.lookSense * Time.deltaTime
         if upArrow:
             self.transform.rotation[0] -= lookSpeed
         if downArrow:
@@ -258,13 +260,17 @@ class GameObject:
             objectFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in self.color]])
         return objectFaces
 
+
 # -------------------------------------GAME UPDATE / RENDERING----------------------------------------------------------
 def Update(camera: Camera):
-    global globalTime
+    global Time
     global gameObjects
-    _getInputs()
-    screen.display.fill((0, 0, 0))
 
+    # Update Inputs
+    _getInputs()
+    camera.movementActions()
+
+    # Get all faces in gameobjects
     globalFaces = []
     for obj in gameObjects:
         globalFaces += obj.Render(camera)
@@ -287,8 +293,9 @@ def Update(camera: Camera):
             return left + [pivot] + right
     globalFaces = sort(globalFaces)
 
-    # -- UPDATE CHANGES --
+    # -- UPDATE GAME --
+    screen.display.fill((0, 0, 0))
     for f in globalFaces:
         pygame.draw.polygon(screen.display, f[-1], f[:-2])
     pygame.display.update()
-    globalTime.frameStep()
+    Time.frameStep()

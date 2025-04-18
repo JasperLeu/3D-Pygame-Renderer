@@ -46,6 +46,17 @@ def angleDiff(angle1, angle2):
         diff *= -1
     return diff
 
+def triWeights(target, points):
+    weights = [0, 0, 0]
+    for i in range(3):
+        m = (points[(i+1)%3][1] - points[i][1]) / (points[(i+1)%3][0] - points[i][0])
+        b = points[i][1] - m * points[i][0]
+        height = abs(m * target[0] + -1 * target[1] + b) / math.sqrt(m * m + 1)
+        weights[i]
+    return weights
+
+def clipTriangle(points, clipDist):
+    pass
 
 def rotatePos(position, rotation, order=None):
     order = [0, 1, 2] if order is None else order
@@ -230,9 +241,11 @@ class GameObject:
     def Render(self, cam: Camera):
         objectFaces = []
         ratio = math.tan(math.radians(cam.FOV/2))
+        # Transform vertices to relative positions
         transformedVerts = [rotatePos(r, self.transform.rotation) for r in self.vertices]
         transformedVerts = [[t[i] * self.transform.scale[i] for i in range(3)] for t in transformedVerts]
         screenPts = [[0, 0] for _ in self.vertices]
+        # Calculate the points on the screen for each face
         for i, v in enumerate(transformedVerts):
             newPos = [v[p] + self.transform.position[p] - cam.transform.position[p] for p in range(3)]
             newPos = rotatePos(newPos, [-r for r in cam.transform.rotation], [2, 1, 0])
@@ -242,6 +255,7 @@ class GameObject:
             else:
                 screenPts[i] = [False]
         for f in self.faces:
+            # Calculate distances from camera
             outOfFrame = False
             center = [0, 0, 0]
             for point in f:
@@ -252,11 +266,13 @@ class GameObject:
                 continue
             avg = [p / len(f) for p in center]
             faceDist = math.dist(avg, cam.transform.position)
+            # Get face normals
             vec1 = [transformedVerts[f[1]][i] - transformedVerts[f[0]][i] for i in range(3)]
             vec2 = [transformedVerts[f[2]][i] - transformedVerts[f[0]][i] for i in range(3)]
             normal = np.cross(vec1, vec2)
             vectorProduct = math.dist(vec1, [0, 0, 0]) * math.dist(vec2, [0, 0, 0])
             factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5 if vectorProduct != 0 else 1
+            # Return each pixel in the object
             objectFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in self.color]])
         return objectFaces
 

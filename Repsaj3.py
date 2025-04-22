@@ -47,10 +47,10 @@ def angleDiff(angle1, angle2):
     return diff
 
 
-def ndList(dimensions, default_value=None):
+def ndList(dimensions):
     if len(dimensions) == 0:
-        return default_value
-    return [ndList(dimensions[1:], default_value) for _ in range(dimensions[0])]
+        return []
+    return [ndList(dimensions[1:]) for _ in range(dimensions[0])]
 
 
 def triWeights(p, points):
@@ -269,7 +269,7 @@ class GameObject:
         gameObjects.append(self)
 
     def Render(self, cam: Camera):
-        renderLayer = ndList(screen.resolution, None)
+        pixels = []
         ratio = math.tan(math.radians(cam.FOV/2))
         # Transform vertices to relative positions
         transformedVerts = [rotatePos(r, self.transform.rotation) for r in self.vertices]
@@ -294,10 +294,10 @@ class GameObject:
 
             # Return each pixel in the object
             for p in f:
-                pointInfo = [[c * factor for c in self.color], math.dist(self.vertices[p], cam.transform.position)]
-                if 0 < screenPts[p][0] < screen.resolution[0] and 0 < screenPts[p][1] < screen.resolution[1]:
-                    renderLayer[int(screenPts[p][0])][int(screenPts[p][1])] = pointInfo
-        return renderLayer
+                pointInfo = [int(screenPts[p][0]), int(screenPts[p][1]), [[c * factor for c in self.color], math.dist(self.vertices[p], cam.transform.position)]]
+                if 0 < pointInfo[0] < screen.resolution[0] and 0 < pointInfo[1] < screen.resolution[1]:
+                    pixels.append(pointInfo)
+        return pixels
 
 
 # -------------------------------------GAME UPDATE / RENDERING----------------------------------------------------------
@@ -305,6 +305,7 @@ def Update(camera: Camera):
     global Time
     global gameObjects
 
+    screen.display.fill((0, 0, 0))
     # Update Inputs
     _getInputs()
     camera.movementActions()
@@ -318,7 +319,7 @@ def Update(camera: Camera):
             left = []
             right = []
             for i in arr[1:]:
-                if i[2] > pivot[2]:
+                if i[-1] > pivot[-1]:
                     left.append(i)
                 else:
                     right.append(i)
@@ -327,20 +328,18 @@ def Update(camera: Camera):
             return left + [pivot] + right
 
     # Get all faces in gameobjects
-    renderStack = ndList(screen.resolution + [0], None)
+    renderStack = ndList(screen.resolution)
     for obj in gameObjects:
         layer = obj.Render(camera)
-        for r in range(len(renderStack)):
-            for p in range(len(renderStack[r])):
-                renderStack[r][p].append(layer[r][p])
+        for p in layer:
+            renderStack[p[0]][p[1]].append(p[2])
     for r in range(len(renderStack)):
         for p in range(len(renderStack[r])):
-            if renderStack[r][p] is not None:
+            if not len(renderStack[r][p]) == 0:
                 renderStack[r][p] = sort(renderStack[r][p])
-                for l in renderStack[r][p]:
-                    screen.display.set_at((r, p), l[0])
+                for point in renderStack[r][p]:
+                    screen.display.set_at([r, p], point[0])
 
     # -- UPDATE GAME --
-    screen.display.fill((0, 0, 0))
     pygame.display.update()
     Time.frameStep()

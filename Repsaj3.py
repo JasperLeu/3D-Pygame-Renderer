@@ -46,17 +46,47 @@ def angleDiff(angle1, angle2):
         diff *= -1
     return diff
 
-def triWeights(target, points):
-    weights = [0, 0, 0]
-    for i in range(3):
-        m = (points[(i+1)%3][1] - points[i][1]) / (points[(i+1)%3][0] - points[i][0])
-        b = points[i][1] - m * points[i][0]
-        height = abs(m * target[0] + -1 * target[1] + b) / math.sqrt(m * m + 1)
-        weights[i]
-    return weights
+
+def ndList(dimensions, default_value=None):
+    if len(dimensions) == 0:
+        return default_value
+    return [ndList(dimensions[1:], default_value) for _ in range(dimensions[0])]
+
+
+def triWeights(p, points):
+    x, y = p
+    x1, y1 = points[0]
+    x2, y2 = points[1]
+    x3, y3 = points[2]
+
+    # Compute vectors
+    v0 = (x2 - x1, y2 - y1)
+    v1 = (x3 - x1, y3 - y1)
+    v2 = (x - x1, y - y1)
+
+    # Compute dot products
+    d00 = v0[0]*v0[0] + v0[1]*v0[1]
+    d01 = v0[0]*v1[0] + v0[1]*v1[1]
+    d11 = v1[0]*v1[0] + v1[1]*v1[1]
+    d20 = v2[0]*v0[0] + v2[1]*v0[1]
+    d21 = v2[0]*v1[0] + v2[1]*v1[1]
+
+    # Compute denominator
+    denominator = d00 * d11 - d01 * d01
+    if denominator == 0:
+        raise ValueError("Triangle is degenerate")
+
+    # Compute barycentric coordinates
+    v = (d11 * d20 - d01 * d21) / denominator
+    w = (d00 * d21 - d01 * d20) / denominator
+    u = 1 - v - w
+
+    return [u, v, w]
+
 
 def clipTriangle(points, clipDist):
     pass
+
 
 def rotatePos(position, rotation, order=None):
     order = [0, 1, 2] if order is None else order
@@ -239,7 +269,7 @@ class GameObject:
         gameObjects.append(self)
 
     def Render(self, cam: Camera):
-        objectFaces = []
+        renderLayer = ndList(screen.resolution, None)
         ratio = math.tan(math.radians(cam.FOV/2))
         # Transform vertices to relative positions
         transformedVerts = [rotatePos(r, self.transform.rotation) for r in self.vertices]
@@ -255,26 +285,19 @@ class GameObject:
             else:
                 screenPts[i] = [False]
         for f in self.faces:
-            # Calculate distances from camera
-            outOfFrame = False
-            center = [0, 0, 0]
-            for point in f:
-                if screenPts[point] == [False]: outOfFrame = True
-                for p in range(3):
-                    center[p] += self.transform.position[p]+transformedVerts[point][p]
-            if outOfFrame:
-                continue
-            avg = [p / len(f) for p in center]
-            faceDist = math.dist(avg, cam.transform.position)
             # Get face normals
             vec1 = [transformedVerts[f[1]][i] - transformedVerts[f[0]][i] for i in range(3)]
             vec2 = [transformedVerts[f[2]][i] - transformedVerts[f[0]][i] for i in range(3)]
             normal = np.cross(vec1, vec2)
             vectorProduct = math.dist(vec1, [0, 0, 0]) * math.dist(vec2, [0, 0, 0])
             factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5 if vectorProduct != 0 else 1
+
             # Return each pixel in the object
-            objectFaces.append([screenPts[p] for p in f]+[faceDist, [c*factor for c in self.color]])
-        return objectFaces
+            for p in f:
+                pointInfo = [[c * factor for c in self.color], math.dist(self.vertices[p], cam.transform.position)]
+                if 0 < screenPts[p][0] < screen.resolution[0] and 0 < screenPts[p][1] < screen.resolution[1]:
+                    renderLayer[int(screenPts[p][0])][int(screenPts[p][1])] = pointInfo
+        return renderLayer
 
 
 # -------------------------------------GAME UPDATE / RENDERING----------------------------------------------------------
@@ -286,12 +309,7 @@ def Update(camera: Camera):
     _getInputs()
     camera.movementActions()
 
-    # Get all faces in gameobjects
-    globalFaces = []
-    for obj in gameObjects:
-        globalFaces += obj.Render(camera)
-
-    # -- ORDER RENDERED TRIANGLES --
+    # -- ORDER POINTS --
     def sort(arr):
         if len(arr) <= 1:
             return arr
@@ -300,18 +318,29 @@ def Update(camera: Camera):
             left = []
             right = []
             for i in arr[1:]:
-                if i[-2] > pivot[-2]:
+                if i[2] > pivot[2]:
                     left.append(i)
                 else:
                     right.append(i)
             left = sort(left)
             right = sort(right)
             return left + [pivot] + right
-    globalFaces = sort(globalFaces)
+
+    # Get all faces in gameobjects
+    renderStack = ndList(screen.resolution + [0], None)
+    for obj in gameObjects:
+        layer = obj.Render(camera)
+        for r in range(len(renderStack)):
+            for p in range(len(renderStack[r])):
+                renderStack[r][p].append(layer[r][p])
+    for r in range(len(renderStack)):
+        for p in range(len(renderStack[r])):
+            if renderStack[r][p] is not None:
+                renderStack[r][p] = sort(renderStack[r][p])
+                for l in renderStack[r][p]:
+                    screen.display.set_at((r, p), l[0])
 
     # -- UPDATE GAME --
     screen.display.fill((0, 0, 0))
-    for f in globalFaces:
-        pygame.draw.polygon(screen.display, f[-1], f[:-2])
     pygame.display.update()
     Time.frameStep()

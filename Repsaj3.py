@@ -29,7 +29,7 @@ screen = Window()
 gameObjects = []
 
 
-# -------------------------------------------SETUP FUNCTIONS------------------------------------------------------------
+# -------------------------------------------------FUNCTIONS------------------------------------------------------------
 def SetupScreen(screenWidth, screenHeight):
     global screen
     screen.resolution = [screenWidth, screenHeight]
@@ -49,43 +49,8 @@ def angleDiff(angle1, angle2):
 
 def ndList(dimensions):
     if len(dimensions) == 0:
-        return []
+        return 0
     return [ndList(dimensions[1:]) for _ in range(dimensions[0])]
-
-
-def triWeights(p, points):
-    x, y = p
-    x1, y1 = points[0]
-    x2, y2 = points[1]
-    x3, y3 = points[2]
-
-    # Compute vectors
-    v0 = (x2 - x1, y2 - y1)
-    v1 = (x3 - x1, y3 - y1)
-    v2 = (x - x1, y - y1)
-
-    # Compute dot products
-    d00 = v0[0]*v0[0] + v0[1]*v0[1]
-    d01 = v0[0]*v1[0] + v0[1]*v1[1]
-    d11 = v1[0]*v1[0] + v1[1]*v1[1]
-    d20 = v2[0]*v0[0] + v2[1]*v0[1]
-    d21 = v2[0]*v1[0] + v2[1]*v1[1]
-
-    # Compute denominator
-    denominator = d00 * d11 - d01 * d01
-    if denominator == 0:
-        raise ValueError("Triangle is degenerate")
-
-    # Compute barycentric coordinates
-    v = (d11 * d20 - d01 * d21) / denominator
-    w = (d00 * d21 - d01 * d20) / denominator
-    u = 1 - v - w
-
-    return [u, v, w]
-
-
-def clipTriangle(points, clipDist):
-    pass
 
 
 def rotatePos(position, rotation, order=None):
@@ -122,6 +87,68 @@ def uploadObj(file_path):
                 face = [int(f.split('/')[0])-1 for f in face]
                 faces.append(face)
     return vertices, faces
+
+
+# -----------------------------------------RENDERING FUNCTIONS----------------------------------------------------------
+class Rendering:
+    @staticmethod
+    def getFill(points):
+        points = [[round(i) for i in p] for p in points]
+        outPts = []
+
+        def yVal(coord):
+            return coord[1]
+
+        for y in range(min(points, key=yVal)[1], max(points, key=yVal)[1] + 1):
+            row = []
+            for line, point in enumerate(points):
+                x1, y1 = point
+                x2, y2 = points[(line + 1) % len(points)]
+                if y2 == y1:
+                    continue
+                if (y >= min(y1, y2)) and (y < max(y1, y2)):
+                    row.append(round(x1 + (y - y1) * (x2 - x1) / (y2 - y1)))
+            row.sort()
+            if len(row) > 1:
+                for i in range(0, len(row), 2):
+                    outPts += [[p, y] for p in range(row[i], row[i+1])]
+            outPts += [[x, y] for x in row]
+        return outPts
+
+    @staticmethod
+    def triWeights(p, points):
+        x, y = p
+        x1, y1 = points[0]
+        x2, y2 = points[1]
+        x3, y3 = points[2]
+
+        # Compute vectors
+        v0 = (x2 - x1, y2 - y1)
+        v1 = (x3 - x1, y3 - y1)
+        v2 = (x - x1, y - y1)
+
+        # Compute dot products
+        d00 = v0[0]*v0[0] + v0[1]*v0[1]
+        d01 = v0[0]*v1[0] + v0[1]*v1[1]
+        d11 = v1[0]*v1[0] + v1[1]*v1[1]
+        d20 = v2[0]*v0[0] + v2[1]*v0[1]
+        d21 = v2[0]*v1[0] + v2[1]*v1[1]
+
+        # Compute denominator
+        denominator = d00 * d11 - d01 * d01
+        if denominator == 0:
+            raise ValueError("Triangle is degenerate")
+
+        # Compute barycentric coordinates
+        v = (d11 * d20 - d01 * d21) / denominator
+        w = (d00 * d21 - d01 * d20) / denominator
+        u = 1 - v - w
+
+        return [u, v, w]
+
+    @staticmethod
+    def clipTriangle(points, clipDist):
+        pass
 
 
 # ---------------------------------------------OBJECT TRANSFORMS--------------------------------------------------------
@@ -293,8 +320,12 @@ class GameObject:
             factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5 if vectorProduct != 0 else 1
 
             # Return each pixel in the object
-            for p in f:
-                pointInfo = [int(screenPts[p][0]), int(screenPts[p][1]), [[c * factor for c in self.color], math.dist(self.vertices[p], cam.transform.position)]]
+            facePts = [self.vertices[i] for i in f]
+            for p in Rendering.getFill([screenPts[i] for i in f]):
+                weights = Rendering.triWeights(p, [screenPts[i] for i in f])
+                pointPos = [sum([weights[i] * facePts[i][a] for i in range(3)]) for a in range(3)]
+                dist = math.dist(pointPos, cam.transform.position)
+                pointInfo = [p[0], p[1], [[c * factor for c in self.color], dist]]
                 if 0 < pointInfo[0] < screen.resolution[0] and 0 < pointInfo[1] < screen.resolution[1]:
                     pixels.append(pointInfo)
         return pixels
@@ -305,12 +336,14 @@ def Update(camera: Camera):
     global Time
     global gameObjects
 
+    # Clear screen
     screen.display.fill((0, 0, 0))
+
     # Update Inputs
     _getInputs()
     camera.movementActions()
 
-    # -- ORDER POINTS --
+    # Sort Function
     def sort(arr):
         if len(arr) <= 1:
             return arr
@@ -332,13 +365,17 @@ def Update(camera: Camera):
     for obj in gameObjects:
         layer = obj.Render(camera)
         for p in layer:
-            renderStack[p[0]][p[1]].append(p[2])
+            if renderStack[p[0]][p[1]] != 0:
+                if renderStack[p[0]][p[1]][1] > p[2][1]:
+                    renderStack[p[0]][p[1]] = p[2]
+            else:
+                renderStack[p[0]][p[1]] = p[2]
+
     for r in range(len(renderStack)):
-        for p in range(len(renderStack[r])):
-            if not len(renderStack[r][p]) == 0:
-                renderStack[r][p] = sort(renderStack[r][p])
-                for point in renderStack[r][p]:
-                    screen.display.set_at([r, p], point[0])
+        for c, point, in enumerate(renderStack[r]):
+            if not point == 0:
+                screen.display.set_at([r, c], point[0])
+
 
     # -- UPDATE GAME --
     pygame.display.update()

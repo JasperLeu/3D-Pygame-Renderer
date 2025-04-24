@@ -12,9 +12,9 @@ GameObjects = []
 # -------------------------------------------SCREEN OBJECT--------------------------------------------------------------
 class Window:
     def __init__(self, resolution, renderScale):
-        self.display = pygame.display.set_mode([i * renderScale for i in resolution])
+        self.display = pygame.display.set_mode(resolution)
         self.resolution = resolution
-        self.image = ndList(resolution)
+        self.image = np.zeros([round(resolution[i]/renderScale) for i in range(2)])
         self.renderScale = renderScale
 
     def refresh(self):
@@ -23,10 +23,10 @@ class Window:
             for c, pixel in enumerate(self.image[r]):
                 if not pixel == 0:
                     if self.renderScale == 1:
-                        self.display.set_at([r, c], pixel[0])
+                        self.display.set_at([r*self.renderScale, c*self.renderScale], pixel[0])
                     else:
                         pygame.draw.rect(self.display, pixel[0], [math.ceil(i * self.renderScale) for i in (r, c, 1, 1)])
-        self.image = ndList(self.resolution)
+        self.image.fill(0)
         pygame.display.update()
 
 
@@ -112,12 +112,12 @@ class Rendering:
                 if y2 == y1:
                     continue
                 if (y >= min(y1, y2)) and (y < max(y1, y2)):
-                    row.append(round(x1 + (y - y1) * (x2 - x1) / (y2 - y1)))
+                    row.append(x1 + (y - y1) * (x2 - x1) / (y2 - y1))
             row.sort()
             if len(row) > 1:
                 for i in range(0, len(row), 2):
-                    outPts += [[p, y] for p in range(row[i], row[i+1])]
-            outPts += [[x, y] for x in row]
+                    outPts += [[p, y] for p in range(math.floor(row[i]), math.ceil(row[i+1]))]
+            outPts += [[round(x), round(y)] for x in row]
         return outPts
 
     @staticmethod
@@ -313,8 +313,8 @@ class GameObject:
             newPos = [v[p] + self.transform.position[p] - camera.transform.position[p] for p in range(3)]
             newPos = rotatePos(newPos, [-r for r in camera.transform.rotation], [2, 1, 0])
             if newPos[2] > 0:
-                screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * display.resolution[0] / 2
-                screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * display.resolution[0] / 2
+                screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * len(display.image) / 2
+                screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * len(display.image) / 2
             else:
                 screenPts[i] = [False]
         for f in self.faces:
@@ -326,13 +326,15 @@ class GameObject:
             factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5 if vectorProduct != 0 else 1
 
             # Return each pixel in the object
-            facePts = [self.vertices[i] for i in f]
+            facePts = [transformedVerts[i] for i in f]
             for p in Rendering.getFill([screenPts[i] for i in f]):
+                # Map Each point in triangle to global position
                 weights = Rendering.triWeights(p, [screenPts[i] for i in f])
                 pointPos = [sum([weights[i] * facePts[i][a] for i in range(3)]) for a in range(3)]
                 dist = math.dist(pointPos, camera.transform.position)
-                pointInfo = [p[0], p[1], [[c * factor for c in self.color], dist]]
-                if 0 < pointInfo[0] < display.resolution[0] and 0 < pointInfo[1] < display.resolution[1]:
+                c = [i * factor for i in self.color]
+                pointInfo = np.array(p + c + [dist])
+                if 0 < pointInfo[0] < len(display.image) and 0 < pointInfo[1] < len(display.image):
                     pixels.append(pointInfo)
         return pixels
 
@@ -345,32 +347,17 @@ def UpdateGame(camera: Camera, display: Window):
     _getInputs()
     camera.movementActions()
 
-    # Sort Function
-    def sort(arr):
-        if len(arr) <= 1:
-            return arr
-        else:
-            pivot = arr[0]
-            left = []
-            right = []
-            for i in arr[1:]:
-                if i[-1] > pivot[-1]:
-                    left.append(i)
-                else:
-                    right.append(i)
-            left = sort(left)
-            right = sort(right)
-            return left + [pivot] + right
-
     # Get all faces in gameobjects
     for obj in GameObjects:
         layer = obj.Render(camera, display)
         for p in layer:
-            if display.image[p[0]][p[1]] != 0:
-                if display.image[p[0]][p[1]][1] > p[2][1]:
-                    display.image[p[0]][p[1]] = p[2]
+            print(type(p[0]))
+            print(p)
+            if display.image[p[0], p[1]] != 0:
+                if display.image[p[0], p[1]] > p[-1]:
+                    display.image[p[0], p[1]] = p[2:]
             else:
-                display.image[p[0]][p[1]] = p[2]
+                display.image[p[0], p[1]] = p[2:]
 
     # -- UPDATE GAME --
     Time.frameStep()

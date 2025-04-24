@@ -3,13 +3,32 @@ import pygame
 import math
 import numpy as np
 
+# GLOBAL VARIABLES
+pygame.init()
+LIGHT_VECTOR = [0, -1, 0]
+GameObjects = []
+
 
 # -------------------------------------------SCREEN OBJECT--------------------------------------------------------------
 class Window:
-    def __init__(self):
-        self.display = pygame.display.set_mode()
-        self.resolution = []
-        self.pixelStack = []
+    def __init__(self, resolution, renderScale):
+        self.display = pygame.display.set_mode([i * renderScale for i in resolution])
+        self.resolution = resolution
+        self.image = ndList(resolution)
+        self.renderScale = renderScale
+
+    def refresh(self):
+        self.display.fill((0, 0, 0))
+        for r in range(len(self.image)):
+            for c, pixel in enumerate(self.image[r]):
+                if not pixel == 0:
+                    if self.renderScale == 1:
+                        self.display.set_at([r, c], pixel[0])
+                    else:
+                        pygame.draw.rect(self.display, pixel[0], [math.ceil(i * self.renderScale) for i in (r, c, 1, 1)])
+        self.image = ndList(self.resolution)
+        pygame.display.update()
+
 
 # -------------------------------------------TIME CLASS--------------------------------------------------------------
 class Timer:
@@ -21,23 +40,9 @@ class Timer:
         tempTime = pygame.time.get_ticks()/1000
         self.deltaTime = tempTime - self.runTime
         self.runTime = tempTime
-
-# GLOBAL VARIABLES
-LIGHT_VECTOR = [0, -1, 0]
 Time = Timer()
-screen = Window()
-gameObjects = []
-
 
 # -------------------------------------------------FUNCTIONS------------------------------------------------------------
-def SetupScreen(screenWidth, screenHeight):
-    global screen
-    screen.resolution = [screenWidth, screenHeight]
-    screen.pixelStack = np.zeros((screenWidth, screenHeight))
-    pygame.init()
-    screen.display = pygame.display.set_mode((screenWidth, screenHeight))
-
-
 def angleDiff(angle1, angle2):
     diff = abs(angle1 - angle2)
     if diff > 180:
@@ -222,6 +227,7 @@ class Camera:
             self.transform.rotation[1] -= lookSpeed
         self.transform.rotation = [r % 360 for r in self.transform.rotation]
 
+
 # ---------------------------------------------USER INPUTS--------------------------------------------------------------
 def _getInputs():
     global leftArrow
@@ -288,27 +294,27 @@ def _getInputs():
 # -----------------------------------------------OBJECT CLASS-----------------------------------------------------------
 class GameObject:
     def __init__(self, transform: Transform):
-        global gameObjects
+        global GameObjects
         self.transform = transform
         self.vertices = []
         self.faces = []
         self.color = (255, 255, 255)
-        gameObjects.append(self)
+        GameObjects.append(self)
 
-    def Render(self, cam: Camera):
+    def Render(self, camera: Camera, display: Window):
         pixels = []
-        ratio = math.tan(math.radians(cam.FOV/2))
+        ratio = math.tan(math.radians(camera.FOV/2))
         # Transform vertices to relative positions
         transformedVerts = [rotatePos(r, self.transform.rotation) for r in self.vertices]
         transformedVerts = [[t[i] * self.transform.scale[i] for i in range(3)] for t in transformedVerts]
         screenPts = [[0, 0] for _ in self.vertices]
         # Calculate the points on the screen for each face
         for i, v in enumerate(transformedVerts):
-            newPos = [v[p] + self.transform.position[p] - cam.transform.position[p] for p in range(3)]
-            newPos = rotatePos(newPos, [-r for r in cam.transform.rotation], [2, 1, 0])
+            newPos = [v[p] + self.transform.position[p] - camera.transform.position[p] for p in range(3)]
+            newPos = rotatePos(newPos, [-r for r in camera.transform.rotation], [2, 1, 0])
             if newPos[2] > 0:
-                screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * screen.resolution[0] / 2
-                screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * screen.resolution[0] / 2
+                screenPts[i][0] = (newPos[0]/newPos[2]/ratio+1) * display.resolution[0] / 2
+                screenPts[i][1] = (-newPos[1]/newPos[2]/ratio+1) * display.resolution[0] / 2
             else:
                 screenPts[i] = [False]
         for f in self.faces:
@@ -324,20 +330,16 @@ class GameObject:
             for p in Rendering.getFill([screenPts[i] for i in f]):
                 weights = Rendering.triWeights(p, [screenPts[i] for i in f])
                 pointPos = [sum([weights[i] * facePts[i][a] for i in range(3)]) for a in range(3)]
-                dist = math.dist(pointPos, cam.transform.position)
+                dist = math.dist(pointPos, camera.transform.position)
                 pointInfo = [p[0], p[1], [[c * factor for c in self.color], dist]]
-                if 0 < pointInfo[0] < screen.resolution[0] and 0 < pointInfo[1] < screen.resolution[1]:
+                if 0 < pointInfo[0] < display.resolution[0] and 0 < pointInfo[1] < display.resolution[1]:
                     pixels.append(pointInfo)
         return pixels
 
 
 # -------------------------------------GAME UPDATE / RENDERING----------------------------------------------------------
-def Update(camera: Camera):
+def UpdateGame(camera: Camera, display: Window):
     global Time
-    global gameObjects
-
-    # Clear screen
-    screen.display.fill((0, 0, 0))
 
     # Update Inputs
     _getInputs()
@@ -361,22 +363,14 @@ def Update(camera: Camera):
             return left + [pivot] + right
 
     # Get all faces in gameobjects
-    renderStack = ndList(screen.resolution)
-    for obj in gameObjects:
-        layer = obj.Render(camera)
+    for obj in GameObjects:
+        layer = obj.Render(camera, display)
         for p in layer:
-            if renderStack[p[0]][p[1]] != 0:
-                if renderStack[p[0]][p[1]][1] > p[2][1]:
-                    renderStack[p[0]][p[1]] = p[2]
+            if display.image[p[0]][p[1]] != 0:
+                if display.image[p[0]][p[1]][1] > p[2][1]:
+                    display.image[p[0]][p[1]] = p[2]
             else:
-                renderStack[p[0]][p[1]] = p[2]
-
-    for r in range(len(renderStack)):
-        for c, point, in enumerate(renderStack[r]):
-            if not point == 0:
-                screen.display.set_at([r, c], point[0])
-
+                display.image[p[0]][p[1]] = p[2]
 
     # -- UPDATE GAME --
-    pygame.display.update()
     Time.frameStep()

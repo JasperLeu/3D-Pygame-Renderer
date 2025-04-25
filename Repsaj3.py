@@ -14,18 +14,18 @@ class Window:
     def __init__(self, resolution, renderScale):
         self.display = pygame.display.set_mode(resolution)
         self.resolution = resolution
-        self.image = np.zeros([round(resolution[i]/renderScale) for i in range(2)])
+        self.image = np.zeros([round(resolution[i]/renderScale) for i in range(2)] + [4])
         self.renderScale = renderScale
 
     def refresh(self):
         self.display.fill((0, 0, 0))
         for r in range(len(self.image)):
             for c, pixel in enumerate(self.image[r]):
-                if not pixel == 0:
+                if not pixel.all() == 0:
                     if self.renderScale == 1:
                         self.display.set_at([r*self.renderScale, c*self.renderScale], pixel[0])
                     else:
-                        pygame.draw.rect(self.display, pixel[0], [math.ceil(i * self.renderScale) for i in (r, c, 1, 1)])
+                        pygame.draw.rect(self.display, pixel[0:3], [math.ceil(i * self.renderScale) for i in (r, c, 1, 1)])
         self.image.fill(0)
         pygame.display.update()
 
@@ -318,13 +318,12 @@ class GameObject:
             else:
                 screenPts[i] = [False]
         for f in self.faces:
-            # Get face normals
+            # Get face normals and light dot product
             vec1 = [transformedVerts[f[1]][i] - transformedVerts[f[0]][i] for i in range(3)]
             vec2 = [transformedVerts[f[2]][i] - transformedVerts[f[0]][i] for i in range(3)]
             normal = np.cross(vec1, vec2)
             vectorProduct = math.dist(vec1, [0, 0, 0]) * math.dist(vec2, [0, 0, 0])
             factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5 if vectorProduct != 0 else 1
-
             # Return each pixel in the object
             facePts = [transformedVerts[i] for i in f]
             for p in Rendering.getFill([screenPts[i] for i in f]):
@@ -334,7 +333,7 @@ class GameObject:
                 dist = math.dist(pointPos, camera.transform.position)
                 c = [i * factor for i in self.color]
                 pointInfo = np.array(p + c + [dist])
-                if 0 < pointInfo[0] < len(display.image) and 0 < pointInfo[1] < len(display.image):
+                if 0 < pointInfo[0] < len(display.image) and 0 < pointInfo[1] < len(display.image[1]):
                     pixels.append(pointInfo)
         return pixels
 
@@ -351,13 +350,12 @@ def UpdateGame(camera: Camera, display: Window):
     for obj in GameObjects:
         layer = obj.Render(camera, display)
         for p in layer:
-            print(type(p[0]))
-            print(p)
-            if display.image[p[0], p[1]] != 0:
-                if display.image[p[0], p[1]] > p[-1]:
-                    display.image[p[0], p[1]] = p[2:]
+            x, y = (np.int16(p[i]) for i in range(2))
+            if display.image[x, y].all() != 0:
+                if display.image[x, y][-1] > p[-1]:
+                    display.image[x, y] = np.array(p[2:])
             else:
-                display.image[p[0], p[1]] = p[2:]
+                display.image[x, y] = np.array(p[2:])
 
     # -- UPDATE GAME --
     Time.frameStep()

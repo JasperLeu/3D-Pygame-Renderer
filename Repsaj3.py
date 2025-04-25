@@ -11,21 +11,21 @@ GameObjects = []
 
 # -------------------------------------------SCREEN OBJECT--------------------------------------------------------------
 class Window:
-    def __init__(self, resolution, renderScale):
+    def __init__(self, resolution, pixelSize):
         self.display = pygame.display.set_mode(resolution)
         self.resolution = resolution
-        self.image = np.zeros([round(resolution[i]/renderScale) for i in range(2)] + [4])
-        self.renderScale = renderScale
+        self.image = np.zeros([round(resolution[i]/pixelSize) for i in range(2)] + [4])
+        self.pixelSize = pixelSize
 
     def refresh(self):
         self.display.fill((0, 0, 0))
         for r in range(len(self.image)):
             for c, pixel in enumerate(self.image[r]):
                 if not pixel.all() == 0:
-                    if self.renderScale == 1:
-                        self.display.set_at([r*self.renderScale, c*self.renderScale], pixel[0])
+                    if self.pixelSize == 1:
+                        self.display.set_at([r*self.pixelSize, c*self.pixelSize], pixel[0:3])
                     else:
-                        pygame.draw.rect(self.display, pixel[0:3], [math.ceil(i * self.renderScale) for i in (r, c, 1, 1)])
+                        pygame.draw.rect(self.display, pixel[0:3], [math.ceil(i * self.pixelSize) for i in (r, c, 1, 1)])
         self.image.fill(0)
         pygame.display.update()
 
@@ -326,6 +326,7 @@ class GameObject:
             factor = -np.dot(LIGHT_VECTOR, normal)/vectorProduct/2+.5 if vectorProduct != 0 else 1
             # Return each pixel in the object
             facePts = [transformedVerts[i] for i in f]
+            # print([screenPts[i] for i in f])
             for p in Rendering.getFill([screenPts[i] for i in f]):
                 # Map Each point in triangle to global position
                 weights = Rendering.triWeights(p, [screenPts[i] for i in f])
